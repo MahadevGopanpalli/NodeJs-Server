@@ -1,97 +1,77 @@
-#!/usr/bin/env node
+var express = require("express");
+const { ObjectId } = require("mongodb");
+var router = express.Router();
+var {connect } = require('../db')
 
-/**
- * Module dependencies.
- */
 
-var app = require('../app');
-var debug = require('debug')('express:server');
-var http = require('http');
-const {connect} = require('../db');
-
-connect().then((data)=>
-{
-  console.log("Connected to DB...");
-}).catch((err)=>{
-  console.log("Error while connecting to DB...",err);
-})
-/**
- * Get port from environment and store in Express.
- */
-
-var port = normalizePort(process.env.PORT || '8080');
-app.set('port', port);
-
-/**
- * Create HTTP server.
- */
-
-var server = http.createServer(app);
-
-/**
- * Listen on provided port, on all network interfaces.
- */
-
-server.listen(port);
-server.on('error', onError);
-server.on('listening', onListening);
-
-/**
- * Normalize a port into a number, string, or false.
- */
-
-function normalizePort(val) {
-  var port = parseInt(val, 10);
-
-  if (isNaN(port)) {
-    // named pipe
-    return val;
+/* GET home page. */
+router.get("/:id", async function (req, res, next) {
+  try
+  {
+    let id = req.params.id;
+    console.log("Checking the product...",id);
+    const db = await connect();
+    const re = await db.collection('products').findOne({_id:new ObjectId(id)});
+    console.log(re)
+    if(!re)
+    {
+      console.log("Not found Data...");
+      return res.status(404).json({});
+    }
+    re['id'] = String(re['_id']);
+    return res.status(200).json(re);
   }
-
-  if (port >= 0) {
-    // port number
-    return port;
+  catch(e)
+  {
+    console.log("Error while finding the prduct....",e);
+    return res.status(400).json({ status: "failure", reason: e });
   }
+});
 
-  return false;
-}
-
-/**
- * Event listener for HTTP server "error" event.
- */
-
-function onError(error) {
-  if (error.syscall !== 'listen') {
-    throw error;
+// Add the product
+router.post("/", async function (req, res, next) {
+  try {
+    let product = req.body;
+    if (product.quantity < 0) {
+      return res
+        .status(416)
+        .json({ status: "failure", reason: "Quantity is negative no." });
+    }
+    console.log("Adding the product...");
+    const db = await connect();
+    const re = await db.collection('products').insertOne(product);
+    product['id'] = re.insertedId;
+    console.log(product)
+    return res.status(201).json(product);
+  } catch (e) {
+    console.log("Error while adding product---", e);
+    return res.status(400).json({ status: "failure", reason: e });
   }
+});
 
-  var bind = typeof port === 'string'
-    ? 'Pipe ' + port
-    : 'Port ' + port;
-
-  // handle specific listen errors with friendly messages
-  switch (error.code) {
-    case 'EACCES':
-      console.error(bind + ' requires elevated privileges');
-      process.exit(1);
-      break;
-    case 'EADDRINUSE':
-      console.error(bind + ' is already in use');
-      process.exit(1);
-      break;
-    default:
-      throw error;
+// Delete the product
+router.delete("/:id", async function (req, res, next) {
+  try
+  {
+    let id = req.params.id;
+    console.log("Deleting the product...",id);
+    const db = await connect();
+    const re = await db.collection('products').deleteOne({_id:new ObjectId(id)});
+    console.log(re)
+    if(!re)
+    {
+      console.log("Not found Data...");
+      return res.status(404).json({});
+    }
+    return res.status(204).json({
+      "status": "success"
+      });
   }
-}
+  catch(e)
+  {
+    console.log("Error while finding the prduct....");
+    return res.status(400).json({ status: "failure", reason: e });
+  }
+});
 
-/**
- * Event listener for HTTP server "listening" event.
- */
-
-function onListening() {
-  var addr = server.address();
-  var bind = typeof addr === 'string'
-    ? 'pipe ' + addr
-    : 'port ' + addr.port;
-  debug('Listening on ' + bind);
-}
+module.exports = router;
